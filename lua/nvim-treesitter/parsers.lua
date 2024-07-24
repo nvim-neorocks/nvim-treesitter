@@ -2685,13 +2685,7 @@ end
 function M.available_parsers()
   local parsers = vim.tbl_keys(M.list)
   table.sort(parsers)
-  if vim.fn.executable "tree-sitter" == 1 and vim.fn.executable "node" == 1 then
-    return parsers
-  else
-    return vim.tbl_filter(function(p) ---@param p string
-      return not M.list[p].install_info.requires_generate_from_grammar
-    end, parsers)
-  end
+  return parsers
 end
 
 function M.get_parser_configs()

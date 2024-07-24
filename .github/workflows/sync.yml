@@ -1,0 +1,29 @@
+---
+name: Rebase on upstream
+on:
+  workflow_dispatch:
+  schedule:
+    # Runs 30 min past every 12 h
+    - cron: "30 */12 * * *"
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebase on upstream
+        run: |
+          git config --global user.name 'Marc Jakobi'
+          git config --global user.email 'marc@jakobi.dev'
+
+          # "git checkout master" is unnecessary, already here by default
+          git pull --unshallow  # this option is very important, you would get
+                                # complains about unrelated histories without it.
+                                # (but actions/checkout can also be instructed
+                                # to fetch all git depth right from the start)
+
+          git remote add upstream https://github.com/nvim-treesitter/nvim-treesitter.git
+          git fetch upstream
+
+          git checkout master
+          git rebase upstream/master
+          git push origin master

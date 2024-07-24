@@ -501,6 +501,33 @@ end
 ---@field generate_from_grammar boolean
 ---@field exclude_configured_parsers boolean
 
+---@param options? InstallOptions
+local function rocks_install(options, ...)
+  local rocks = require "rocks.api"
+  options = options or {}
+  local exclude_configured_parsers = options.exclude_configured_parsers
+  local languages ---@type string[]
+  if ... == "all" then
+    languages = vim.tbl_keys(parsers.list)
+  else
+    languages = compat.flatten { ... }
+  end
+  table.sort(languages)
+  if exclude_configured_parsers then
+    languages = utils.difference(languages, configs.get_ignored_parser_installs())
+  end
+  vim
+    .iter(languages)
+    ---@param lang string
+    :map(function(lang, _)
+      return "tree-sitter-" .. lang
+    end)
+    ---@param parser_rock string
+    :each(function(parser_rock)
+      rocks.install(parser_rock)
+    end)
+end
+
 -- Install a parser
 ---@param options? InstallOptions
 ---@return function
@@ -511,7 +538,13 @@ local function install(options)
   local generate_from_grammar = options.generate_from_grammar
   local exclude_configured_parsers = options.exclude_configured_parsers
 
+  local has_rocks_nvim = pcall(require, "rocks.api")
+
   return function(...)
+    if has_rocks_nvim then
+      rocks_install(options, ...)
+      return
+    end
     if fn.executable "git" == 0 then
       return api.nvim_err_writeln "Git is required on your system to run this command"
     end
@@ -608,7 +641,46 @@ function M.update(options)
   end
 end
 
+local function rocks_prune(...)
+  if vim.tbl_contains({ "all" }, ...) then
+    local installed = info.installed_parsers()
+    M.uninstall(installed)
+  elseif ... then
+    local ensure_installed_parsers = configs.get_ensure_installed_parsers()
+    if ensure_installed_parsers == "all" then
+      ensure_installed_parsers = parsers.available_parsers()
+    end
+    ensure_installed_parsers = utils.difference(ensure_installed_parsers, configs.get_ignored_parser_installs())
+    ---@type string[]
+    local languages = compat.flatten { ... }
+    vim
+      .iter(languages)
+      ---@param lang string
+      :map(function(lang, _)
+        if vim.tbl_contains(ensure_installed_parsers, lang) then
+          vim.notify(
+            "Uninstalling "
+              .. lang
+              .. '. But the parser is still configured in "ensure_installed" setting of nvim-treesitter.'
+              .. " Please consider updating your config!",
+            vim.log.levels.ERROR
+          )
+        end
+        return "tree-sitter-" .. lang
+      end)
+      ---@param parser_rock string
+      :each(function(parser_rock)
+        vim.cmd.Rocks { "prune", parser_rock }
+      end)
+  end
+end
+
 function M.uninstall(...)
+  local has_rocks_nvim = pcall(require, "rocks.api")
+  if has_rocks_nvim then
+    rocks_prune(...)
+    return
+  end
   if vim.tbl_contains({ "all" }, ...) then
     reset_progress_counter()
     local installed = info.installed_parsers()

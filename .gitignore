@@ -5,3 +5,4 @@ nvim.appimage
 nvim-linux64*
 nvim-macos*
 nvim-win64*
+.luarc.json
